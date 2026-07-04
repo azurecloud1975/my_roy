@@ -367,7 +367,10 @@
             const questions = [];
             let currentQ = null;
             
-            const qRegexTW = /^(\d+)[\.、]\s*\(([1-4A-Da-d]+)\)\s*(.*)/;
+            // 替換：新增支援兩種題號格式的正規表達式
+            const qRegexTW_A = /^(\d+)[\.、]\s*\(([1-4A-Da-d]+)\)\s*(.*)/; // 支援格式：1.(1) 題目
+            const qRegexTW_B = /^\(([1-4A-Da-d]+)\)\s*(\d+)[\.、]\s*(.*)/; // 支援格式：(1) 1. 題目
+            
             const qRegexCCNA = /^(?:QUESTION\s*\d+|第?\s*\d+\s*[題\.]|Q\d+[:\.]?)\s*(.*)/i;
             const optRegex = /^\(?([A-H])\)?[\.、]\s*(.*)/i; 
             const ansRegex = /(?:Correct\s*Answer|答案|解答|Ans(?:wer)?)[\s:：]*([A-Ha-h\s,]+)/i;
@@ -377,8 +380,11 @@
 
                 const combinedText = currentQ.question + (currentQ.options.length === 0 ? "" : " " + currentQ.options.map(o => o.text).join(" "));
                 
-                if (currentQ.options.length === 0 && (combinedText.includes('①') || combinedText.includes('(1)'))) {
-                    let qText = combinedText.replace(/\(1\)/g, '①').replace(/\(2\)/g, '②').replace(/\(3\)/g, '③').replace(/\(4\)/g, '④');
+                // 替換：增加對 (A)(B)(C)(D) 選項格式的支援
+                if (currentQ.options.length === 0 && (combinedText.includes('①') || combinedText.includes('(1)') || combinedText.includes('(A)') || combinedText.includes('(a)'))) {
+                    let qText = combinedText
+                        .replace(/\(1\)/g, '①').replace(/\(2\)/g, '②').replace(/\(3\)/g, '③').replace(/\(4\)/g, '④')
+                        .replace(/\(A\)/gi, '①').replace(/\(B\)/gi, '②').replace(/\(C\)/gi, '③').replace(/\(D\)/gi, '④');
                     
                     const opt1 = qText.indexOf('①');
                     const opt2 = qText.indexOf('②');
@@ -409,10 +415,16 @@
             };
 
             for (let line of lines) {
-                let twMatch = line.match(qRegexTW);
-                if (twMatch) {
+                // 替換：智慧判斷並支援兩種題目格式
+                let matchA = line.match(qRegexTW_A);
+                let matchB = line.match(qRegexTW_B);
+                
+                if (matchA || matchB) {
                     pushCurrentQuestion();
-                    let ansStr = twMatch[2];
+                    
+                    let ansStr = matchA ? matchA[2] : matchB[1];
+                    let qText = matchA ? matchA[3] : matchB[3];
+                    
                     let mappedAns = [];
                     for(let char of ansStr) {
                         if(char === '1' || char === 'A' || char === 'a') mappedAns.push('A');
@@ -420,7 +432,7 @@
                         if(char === '3' || char === 'C' || char === 'c') mappedAns.push('C');
                         if(char === '4' || char === 'D' || char === 'd') mappedAns.push('D');
                     }
-                    currentQ = { question: twMatch[3] || "", options: [], answer: mappedAns };
+                    currentQ = { question: qText || "", options: [], answer: mappedAns };
                     continue;
                 }
 
