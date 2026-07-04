@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuizForge - 測驗與錯題神器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <style>
+        :root {
+            --primary: #D4FF33; 
+            --primary-hover: #BBE022;
+            --bg: #111111;
+            --card-bg: #1E1E1E;
+            --text-main: #FFFFFF;
+            --text-muted: #9CA3AF;
+            --border: #333333;
+            --success-bg: rgba(74, 222, 128, 0.1);
+            --success-border: #4ADE80;
+            --danger-bg: rgba(248, 113, 113, 0.1);
+            --danger-border: #F87171;
+            --radius: 8px;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        body { 
+            background-color: var(--bg); color: var(--text-main); 
+            margin: 0; padding: 0; display: flex; flex-direction: column; 
+            min-height: 100vh;
+        }
+
+        header {
+            background-color: var(--card-bg); padding: 15px 20px;
+            border-bottom: 1px solid var(--border); display: flex;
+            justify-content: space-between; align-items: center;
+        }
+        .logo { font-size: 1.5rem; font-weight: bold; color: var(--primary); }
+        
+        button {
+            background-color: var(--primary); color: #111; border: none; font-weight: bold;
+            padding: 10px 20px; border-radius: var(--radius); cursor: pointer;
+            font-size: 1rem; transition: background 0.2s;
+        }
+        button:hover { background-color: var(--primary-hover); }
+        button.outline {
+            background-color: transparent; color: var(--text-main);
+            border: 1px solid var(--border); font-weight: normal;
+        }
+        button.outline:hover { background-color: #333; }
+
+        .container { max-width: 800px; margin: 30px auto; padding: 0 20px; flex: 1; width: 100%; }
+        .screen { display: none; }
+        .screen.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .card {
+            background: var(--card-bg); padding: 25px; border-radius: var(--radius);
+            border: 1px solid var(--border); margin-bottom: 20px;
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--border); border-radius: var(--radius);
+            padding: 40px; text-align: center; color: var(--text-muted);
+            cursor: pointer; transition: border-color 0.2s; background: #161616;
+        }
+        .drop-zone.dragover { border-color: var(--primary); }
+        textarea {
+            width: 100%; height: 150px; padding: 15px; border: 1px solid var(--border);
+            border-radius: var(--radius); resize: vertical; margin-top: 15px; font-size: 1rem;
+            background: #161616; color: var(--text-main);
+        }
+
+        .settings-group label { margin-right: 15px; cursor: pointer; }
+        .q-count-selector { margin-top: 15px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px;}
+        
+        .q-count-selector input[type="text"] { 
+            width: 230px; padding: 6px; border: 1px solid var(--border); 
+            border-radius: 4px; background: #161616; color: white; font-size: 0.9rem;
+        }
+        .q-count-selector input[type="text"]::placeholder { color: #777; }
+        .q-count-selector input[type="text"]:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .quiz-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 15px; margin-bottom: 20px;}
+        
+        .option-label {
+            display: block; padding: 15px; margin-bottom: 10px; border: 1px solid var(--border);
+            border-radius: var(--radius); cursor: pointer; transition: all 0.2s; background: #1A1A1A;
+        }
+        .option-label:hover { background: #2A2A2A; }
+        .option-label.selected { border-color: var(--primary); background: rgba(212, 255, 51, 0.05); }
+        .option-label.correct-ans { border-color: var(--success-border); background: var(--success-bg); }
+        .option-label.wrong-ans { border-color: var(--danger-border); background: var(--danger-bg); }
+        
+        .option-label b { color: var(--primary); margin-right: 5px; }
+        .option-label.correct-ans b { color: var(--success-border); }
+        .option-label.wrong-ans b { color: var(--danger-border); }
+
+        .quiz-footer { display: flex; justify-content: space-between; margin-top: 20px; }
+        .hint { text-align: right; color: var(--text-muted); font-size: 0.8rem; margin-top: 15px; }
+
+        .result-summary { text-align: center; }
+        .score-circle { font-size: 3rem; font-weight: bold; color: var(--primary); margin: 20px 0; }
+        .stats-cards { display: flex; justify-content: center; gap: 20px; margin-bottom: 30px; }
+        .stat-card { padding: 20px; border-radius: var(--radius); min-width: 120px; text-align: center; border: 1px solid var(--border); }
+        .stat-card h3 { margin: 0; font-size: 2rem; }
+        
+        .action-buttons { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
+        .details-section { margin-top: 40px; text-align: left;}
+        .detail-item { padding: 15px; border-left: 4px solid var(--border); background: var(--card-bg); margin-bottom: 10px; }
+        
+        .flashcard-container { perspective: 1000px; cursor: pointer; margin-bottom: 20px; }
+        .flashcard-inner {
+            transition: transform 0.6s; transform-style: preserve-3d;
+            width: 100%; min-height: 300px; display: grid;
+        }
+        .flashcard-inner.flipped { transform: rotateY(180deg); }
+        .flashcard-front, .flashcard-back {
+            grid-area: 1 / 1; backface-visibility: hidden; position: relative;
+            width: 100%; display: flex; flex-direction: column;
+            justify-content: center; align-items: flex-start;
+            padding: 50px 30px 30px 30px;
+            background: var(--card-bg); border-radius: var(--radius); border: 1px solid var(--border);
+            text-align: left; font-size: 1.1rem; box-sizing: border-box;
+        }
+        .flashcard-back { transform: rotateY(180deg); background: #161616; }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center;
+            z-index: 1000; display: none;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-content { background: var(--card-bg); padding: 30px; border-radius: var(--radius); text-align: center; max-width: 400px; border: 1px solid var(--border); }
+        .modal-buttons { margin-top: 20px; display: flex; justify-content: space-around; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">QuizForge</div>
+        <button class="outline" onclick="openFlashcards()">⧉ 錯題閃卡 (<span id="header-wrong-count">0</span>)</button>
+    </header>
+
+    <div class="container">
+        <div id="home-screen" class="screen active">
+            <div class="card">
+                <div id="drop-zone" class="drop-zone">
+                    <h3>17200網路架設乙級_工作項目04網路元件及軟體安裝與應用(339題)</h3>
+                    <h3>⇪ 點擊或拖曳檔案至此</h3>
+                    <p>支援 .txt 或 .pdf 格式</p>
+                    <input type="file" id="file-input" accept=".txt,.pdf" style="display:none;">
+                </div>
+                <textarea id="source-text" placeholder="請輸入題目或上傳檔案。">
+(A) 1. 在下列哪一種氣候條件下所形成的木材，細胞最大且顏色最淺？(A)溫暖潮溼 (B)寒冷潮溼 (C)溫暖乾燥 (D)寒冷乾燥。
+(C) 2. 「木材」是由哪一種細胞所構成？(A)韌皮部 (B)表皮 (C)木質部 (D)形成層。
+(B) 3. 榕樹的莖可分為以下數個部分：甲.形成層；乙.木材；丙.樹皮；丁.新的木質部；戊.新的韌皮部，由內而外依序排列為何？(A)乙丁甲丙戊 (B)乙丁甲戊丙 (C)甲乙丁戊丙 (D)甲乙丁丙戊。
+(B) 4. 剝除樹木整圈的樹皮，會造成植物死亡，這是因為破壞了哪一個部分？(A)木質部 (B)韌皮部 (C)形成層 (D)表皮。
+(B) 5. 有關木棉的敘述，何者錯誤？(A)木棉在春天綻放橙紅色的花朵 (B)木棉開花所需的養分是由根製造後向上運送 (C)木棉的葉片行光合作用產生的養分會向下運送到根部儲存 (D)木棉花謝之後才長出新芽。
+(A) 6. 下列何種物質無法由氣孔進入或離開葉片？(A)液態水 (B)氧氣 (C)二氧化碳 (D)水蒸氣。
+(C) 7. 木質部和韌皮部中，物質的運輸方向為何？選項	(A)木質部 上→下或下→上 韌皮部 上→下或下→上	(B)木質部 上→下 韌皮部 下→上	(C)木質部 下→上 韌皮部 上→下或下→上	(D)木質部 上→下或下→上 韌皮部 上→下				
+(A) 8. 保衛細胞在下列何種狀態下，可使氣孔打開？(A)膨脹 (B)萎縮 (C)水分向外滲透 (D)氧氣向外擴散。
+(B) 9. 人類最粗的動脈和哪裡相連？(A)心房 (B)心室 (C)大靜脈 (D)微血管。
+(D) 10. 下列關於人體血液循環系統的敘述，何者錯誤？(A)屬於閉鎖式循環 (B)管壁最薄的血管是微血管 (C)心臟搏動提供血液流動的動力 (D)血漿負責運送氧氣至全身。
+(B) 11. 若遭受細菌感染，醫生可藉由計算血液中何者的數目，來協助診斷病情？(A)紅血球 (B)白血球 (C)血小板 (D)血漿。
+(A) 12. 心臟能規律的收縮和舒張，當心臟收縮時，擠壓血液流入何處？(A)動脈 (B)靜脈 (C)微血管 (D)心房。
+(D) 13. 有關體循環的敘述，下列何者正確？(A)是肺和心臟間的血液循環 (B)在肺與肺循環交會 (C)不會和肺循環同時發生 (D)可進行全身細胞養分、氣體與廢物的交換。
+(B) 14. 在下列哪一構造中，氣體交換情形為氧氣擴散進入血液、二氧化碳擴散進入組織？(A)心臟 (B)肺 (C)胃 (D)肝臟。
+(D) 15. 下列關於人體內氣體交換與運輸的敘述，何者錯誤？(A)氣體以擴散作用進行交換 (B)氧氣由肺泡進入血液中 (C)氧氣由紅血球運送到全身 (D)二氧化碳可經由皮膚排出體外。
+(A) 16. 關於人體血液循環系統的敘述，下列何者錯誤？(A)肺動脈與左心房相連 (B)同一時間下，脈搏與心搏的次數相同 (C)心臟舒張可使血液流回心臟 (D)肺靜脈中血液的氧氣濃度比肺動脈高。
+(B) 17. 以顯微鏡觀察魚尾鰭血液流動情形時，將溼棉花覆蓋在魚身上，只讓魚的尾鰭露在棉花外，其主要目的為下列何者？(A)觀察時方便找到尾鰭 (B)保持魚體表面及鰓的溼潤，以利小魚的呼吸 (C)避免血液流出 (D)用溼棉花壓住小魚，不讓小魚跳動。
+(A) 18. 承上題，觀察時若小魚不停的跳動，該如何處理？(A)加冰水使棉花潮溼，將棉花覆蓋在魚身上，待其穩定再觀察 (B)不必理會，繼續觀察 (C)在溼棉花上加溫水，讓小魚感到舒適，便不會跳動 (D)將小魚敲昏。
+(C) 19. 承第 18 題，選用尾鰭來觀察的主要原因為何？(A)血管較多 (B)血管較粗大 (C)較薄，易透光 (D)較易固定。
+(C) 20. 利用藥劑使氣孔關閉會減少蒸散作用，原因為何？(A)氧氣無法進入 (B)二氧化碳無法排出 (C)水分無法排出 (D)光合作用無法進行。
+(C) 21. 想要取得年輪明顯的木材來製作家具，下列哪一個環境較適合？(A)溫暖多雨的地區 (B)寒冷乾燥的地區 (C)四季分明的地區 (D)不限區域，何處生長都有機會產生明顯年輪
+(B) 22. 右圖均為維管束構造，何者敘述正確？(A) ac 均為輸送水分構造 (B)有 d 構造可使莖加粗 (C)左圖維管束為環狀排列，右圖為散生排列 (D)由 be 處輸送養分
+(A) 23. 人類體表受傷所流出的血液呈紅色，是來自何種血球的顏色？(A)紅血球 (B)白血球 (C)血小板 (D)血漿
+(D) 24. 激素在人體內運送，主要是由何者運送？(A)紅血球 (B)白血球 (C)血小板 (D)血漿
+(D) 25. 血液自心臟心室離開後，再將血液送回心臟所經過的血管順序為何？(A)動脈、靜脈、微血管 (B)靜脈、動脈、微血管 (C)靜脈、微血管、動脈 (D)動脈、微血管、靜脈
+</textarea>
+            </div>
+
+            <div class="card">
+                <h3>⛭ 測驗設定</h3>
+                <div class="settings-group">
+                    <label><input type="checkbox" id="shuffle-options" checked> 打亂選項順序</label>
+                    <label><input type="checkbox" id="shuffle-questions"> 隨機題目順序</label>
+                </div>
+                <div class="q-count-selector">
+                    <span>抽取題數：</span>
+                    <label><input type="radio" name="q-count" value="all" checked> 全部</label>
+                    <label><input type="radio" name="q-count" value="10"> 10 題</label>
+                    <label><input type="radio" name="q-count" value="20"> 20 題</label>
+                    <label><input type="radio" name="q-count" value="30"> 30 題</label>
+                    <label><input type="radio" name="q-count" value="custom"> 自訂 <input type="text" id="custom-q-count" disabled placeholder="測驗數量或範圍 (eg. 1-70)"></label>
+                </div>
+                <button style="width: 100%; margin-top: 20px; font-size: 1.1rem; padding: 15px;" onclick="startQuiz()">▶ 解析並開始測驗</button>
+            </div>
+        </div>
+
+        <div id="quiz-screen" class="screen">
+            <div class="card" style="border:none; background: transparent; padding: 0;">
+                <div class="quiz-header">
+                    <h3 id="quiz-progress" style="margin:0; color: var(--text-muted);">題目 1 / 52</h3>
+                    <button class="outline" style="padding: 5px 10px;" onclick="promptEndQuiz()">■ 結束</button>
+                </div>
+                <h2 id="question-text" style="line-height: 1.6; margin-bottom: 25px;"></h2>
+                <div id="options-container"></div>
+                
+                <div id="feedback-box" style="display:none; padding: 15px; margin-top: 15px; border-radius: var(--radius); text-align: center; font-weight: bold; border: 1px solid transparent;"></div>
+                
+                <div class="quiz-footer">
+                    <div></div>
+                    <button id="submit-btn" style="width: 100%; padding: 15px; display: none;" onclick="submitAnswer()"></button>
+                    <button id="next-btn" style="width: 100%; padding: 15px; display: none;" onclick="nextQuestion()">下一題 →</button>
+                </div>
+                <div class="hint">⌨ 提示：按 <b>Enter</b> 或 <b>空白鍵</b> 可快速送出 / 進入下一題</div>
+            </div>
+        </div>
+
+        <div id="result-screen" class="screen">
+            <div class="card result-summary">
+                <h1># 測驗完成 ★</h1>
+                <div class="score-circle">
+                    <div id="score-percent">100%</div>
+                    <div style="font-size: 1.2rem; color: var(--text-muted);" id="score-fraction">10 / 10</div>
+                </div>
+                <div class="stats-cards">
+                    <div class="stat-card"><h3 id="correct-count" style="color:var(--success-border)">0</h3><p>答對題數</p></div>
+                    <div class="stat-card"><h3 id="wrong-count-display" style="color:var(--danger-border)">0</h3><p>答錯題數</p></div>
+                </div>
+                <div class="action-buttons">
+                    <button onclick="restartQuiz()">⟳ 開始新測驗</button>
+                    <button class="outline" onclick="openFlashcards()">⧉ 複習錯題</button>
+                    <button class="outline" onclick="goHome()">↶ 返回設定</button>
+                </div>
+            </div>
+            <div class="details-section" id="details-section">
+                <h3>☰ 題目詳解</h3>
+                <div id="details-container"></div>
+            </div>
+        </div>
+
+        <div id="flashcard-screen" class="screen">
+            <div style="margin-bottom: 20px; display: flex; justify-content: space-between;">
+                <button class="outline" onclick="goHome()">⌂ 回首頁</button>
+                <button class="outline" style="color: var(--danger-border); border-color: var(--danger-border);" onclick="clearAllFlashcards()">🗑️ 清空錯題本</button>
+            </div>
+            <div class="card" id="empty-flashcard-msg" style="text-align: center; display: none;">
+                <h2>✧</h2><h3>太棒了！您的錯題本空空如也。</h3><p>去進行測驗並發掘需要複習的地方吧！</p>
+            </div>
+            <div id="flashcard-content">
+                <div class="quiz-header"><h3 id="flashcard-progress" style="margin:0; color: var(--text-muted);">進度：1 / 1</h3></div>
+                <div class="flashcard-container" onclick="flipCard()">
+                    <div class="flashcard-inner" id="fc-inner">
+                        <div class="flashcard-front">
+                            <span style="font-size:0.9rem; color:#888; position:absolute; top:15px; left:0; width:100%; text-align:center;">點擊卡片或按 [空白鍵] 翻面</span>
+                            <div id="fc-q-text" style="width:100%;">題目內容...</div>
+                        </div>
+                        <div class="flashcard-back">
+                            <span style="font-size:0.9rem; color:#888; position:absolute; top:15px; left:0; width:100%; text-align:center;">正確答案</span>
+                            <div id="fc-a-text" style="width: 100%; padding-top: 10px;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                    <button class="outline" onclick="prevFlashcard()">← 上一題</button>
+                    <button onclick="markLearned()" style="background: var(--success-bg); color: var(--success-border); border: 1px solid var(--success-border);">✔ 已學會</button>
+                    <button class="outline" onclick="nextFlashcard()">下一題 →</button>
+                </div>
+                <div class="hint">⌨ 提示：可使用 <b>空白鍵</b> 翻面，<b>左右方向鍵</b> 切換題目</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="end-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>確定要結束測驗嗎？</h3><p style="color: var(--text-muted)">目前的進度將會結算為最終成績。</p>
+            <div class="modal-buttons">
+                <button class="outline" onclick="closeModal()">取消</button>
+                <button style="background: var(--danger-border);" onclick="forceEndQuiz()">確定結束</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let parsedQuestions = [], currentTestQuestions = [], currentQuestionIndex = 0;
+        let userAnswers = [], wrongQuestions = JSON.parse(localStorage.getItem('quizForgeWrongQuestions')) || [];
+        let flashcardIndex = 0, isQuizActive = false;
+        
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        updateWrongCountUI();
+        setupEventListeners();
+
+        function setupEventListeners() {
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+            dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+            dropZone.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+            document.querySelectorAll('input[name="q-count"]').forEach(r => {
+                r.addEventListener('change', (e) => {
+                    const customInput = document.getElementById('custom-q-count');
+                    customInput.disabled = (e.target.value !== 'custom');
+                    if(!customInput.disabled) customInput.focus();
+                });
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+                if (isQuizActive && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault();
+                    if (document.getElementById('submit-btn').style.display !== 'none') document.getElementById('submit-btn').click();
+                    else if (document.getElementById('next-btn').style.display !== 'none') document.getElementById('next-btn').click();
+                } else if (document.getElementById('flashcard-screen').classList.contains('active')) {
+                    if (e.key === ' ') { e.preventDefault(); flipCard(); }
+                    else if (e.key === 'ArrowRight') nextFlashcard();
+                    else if (e.key === 'ArrowLeft') prevFlashcard();
+                }
+            });
+        }
+
+        async function handleFiles(files) {
+            if (files.length === 0) return;
+            const file = files[0], textarea = document.getElementById('source-text');
+            if (file.type === 'text/plain') textarea.value = await file.text();
+            else if (file.type === 'application/pdf') {
+                textarea.value = "正在解析 PDF (可能需要數秒鐘)...";
+                try {
+                    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+                    let fullText = '';
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        let lastY = -1;
+                        let pageText = '';
+                        for (let item of textContent.items) {
+                            if (lastY !== -1 && Math.abs(item.transform[5] - lastY) > 5) {
+                                pageText += '\n';
+                            }
+                            pageText += item.str;
+                            lastY = item.transform[5];
+                        }
+                        fullText += pageText + '\n';
+                    }
+                    textarea.value = fullText;
+                } catch(err) { textarea.value = "PDF 解析失敗：" + err.message; }
+            } else alert('請上傳 .txt 或 .pdf 格式檔案');
+        }
+
+        function parseText(text) {
+            const normalizedText = text.replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/（/g, '(').replace(/）/g, ')');
+            
+            const lines = normalizedText.split('\n').map(l => l.trim()).filter(line => {
+                if (!line) return false;
+                if (/^Page \d+ of \d+/i.test(line)) return false;
+                if (/^---\s*PAGE/i.test(line)) return false;
+                if (/勞動部勞動力發展/i.test(line)) return false;
+                if (/MINISTRY OF LABOR/i.test(line)) return false;
+                if (/WORKFORCE DEVELOPMENT/i.test(line)) return false;
+                return true;
+            });
+
+            const questions = [];
+            let currentQ = null;
+            
+            const qRegexTW = /^(\d+)[\.、]\s*\(([1-4A-Da-d]+)\)\s*(.*)/;
+            const qRegexCCNA = /^(?:QUESTION\s*\d+|第?\s*\d+\s*[題\.]|Q\d+[:\.]?)\s*(.*)/i;
+            const optRegex = /^\(?([A-H])\)?[\.、]\s*(.*)/i; 
+            const ansRegex = /(?:Correct\s*Answer|答案|解答|Ans(?:wer)?)[\s:：]*([A-Ha-h\s,]+)/i;
+
+            const pushCurrentQuestion = () => {
+                if (!currentQ) return;
+
+                const combinedText = currentQ.question + (currentQ.options.length === 0 ? "" : " " + currentQ.options.map(o => o.text).join(" "));
+                
+                if (currentQ.options.length === 0 && (combinedText.includes('①') || combinedText.includes('(1)'))) {
+                    let qText = combinedText.replace(/\(1\)/g, '①').replace(/\(2\)/g, '②').replace(/\(3\)/g, '③').replace(/\(4\)/g, '④');
+                    
+                    const opt1 = qText.indexOf('①');
+                    const opt2 = qText.indexOf('②');
+                    const opt3 = qText.indexOf('③');
+                    const opt4 = qText.indexOf('④');
+                    
+                    if (opt1 !== -1) {
+                        currentQ.question = qText.substring(0, opt1).trim();
+                        const t1 = qText.substring(opt1 + 1, opt2 !== -1 ? opt2 : qText.length).trim();
+                        const t2 = opt2 !== -1 ? qText.substring(opt2 + 1, opt3 !== -1 ? opt3 : qText.length).trim() : "";
+                        const t3 = opt3 !== -1 ? qText.substring(opt3 + 1, opt4 !== -1 ? opt4 : qText.length).trim() : "";
+                        const t4 = opt4 !== -1 ? qText.substring(opt4 + 1).trim() : "";
+                        
+                        if(t1) currentQ.options.push({ key: 'A', text: t1 });
+                        if(t2) currentQ.options.push({ key: 'B', text: t2 });
+                        if(t3) currentQ.options.push({ key: 'C', text: t3 });
+                        if(t4) currentQ.options.push({ key: 'D', text: t4 });
+                    }
+                }
+
+                if (currentQ.options.length > 0 && currentQ.answer.length > 0) {
+                    currentQ.question = currentQ.question.replace(/-\s+/g, '-').replace(/([\u4e00-\u9fa5])\s+([\u4e00-\u9fa5])/g, '$1$2').trim();
+                    currentQ.options.forEach(opt => {
+                        opt.text = opt.text.replace(/-\s+/g, '-').replace(/([\u4e00-\u9fa5])\s+([\u4e00-\u9fa5])/g, '$1$2').replace(/。$/, '').trim();
+                    });
+                    questions.push(currentQ);
+                }
+            };
+
+            for (let line of lines) {
+                let twMatch = line.match(qRegexTW);
+                if (twMatch) {
+                    pushCurrentQuestion();
+                    let ansStr = twMatch[2];
+                    let mappedAns = [];
+                    for(let char of ansStr) {
+                        if(char === '1' || char === 'A' || char === 'a') mappedAns.push('A');
+                        if(char === '2' || char === 'B' || char === 'b') mappedAns.push('B');
+                        if(char === '3' || char === 'C' || char === 'c') mappedAns.push('C');
+                        if(char === '4' || char === 'D' || char === 'd') mappedAns.push('D');
+                    }
+                    currentQ = { question: twMatch[3] || "", options: [], answer: mappedAns };
+                    continue;
+                }
+
+                let qMatch = line.match(qRegexCCNA);
+                if (qMatch) {
+                    pushCurrentQuestion();
+                    currentQ = { question: qMatch[1] || "", options: [], answer: [] };
+                    continue;
+                }
+
+                if (!currentQ) continue; 
+
+                let ansMatch = line.match(ansRegex);
+                if (ansMatch) {
+                    currentQ.answer = ansMatch[1].replace(/[^A-Ha-h]/gi, '').toUpperCase().split('');
+                    let cleanLine = line.replace(ansRegex, '').trim();
+                    if (cleanLine) {
+                        let optMatch = cleanLine.match(optRegex);
+                        if (optMatch) {
+                             currentQ.options.push({ key: optMatch[1].toUpperCase(), text: optMatch[2] });
+                        } else if (currentQ.options.length > 0) {
+                             currentQ.options[currentQ.options.length-1].text += ' ' + cleanLine;
+                        }
+                    }
+                    continue; 
+                }
+
+                let optMatch = line.match(optRegex);
+                if (optMatch) {
+                    currentQ.options.push({ key: optMatch[1].toUpperCase(), text: optMatch[2] });
+                    continue;
+                }
+                
+                if (currentQ.options.length === 0) {
+                    currentQ.question += (currentQ.question ? ' ' : '') + line;
+                } else if (currentQ.answer.length === 0) {
+                    currentQ.options[currentQ.options.length-1].text += ' ' + line;
+                }
+            }
+            
+            pushCurrentQuestion();
+            
+            questions.forEach(q => q.options.forEach(opt => opt.isCorrect = q.answer.includes(opt.key)));
+            return questions;
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        function startQuiz() {
+            const text = document.getElementById('source-text').value;
+            if(!text) { alert("請輸入題庫內容！"); return; }
+            parsedQuestions = parseText(text);
+            if (parsedQuestions.length === 0) { alert("無法解析出任何題目，請檢查格式。"); return; }
+
+            let baseQuestions = JSON.parse(JSON.stringify(parsedQuestions));
+            const countType = document.querySelector('input[name="q-count"]:checked').value;
+            let selectedQuestions = [];
+
+            if (countType === 'custom') {
+                const customVal = document.getElementById('custom-q-count').value.trim();
+                if (customVal.includes('-')) {
+                    let parts = customVal.split('-');
+                    let start = parseInt(parts[0]);
+                    let end = parseInt(parts[1]);
+                    if (isNaN(start) || isNaN(end) || start < 1 || end < start) {
+                        alert("自訂範圍格式錯誤！請輸入如 3-50 的格式。");
+                        return;
+                    }
+                    end = Math.min(end, baseQuestions.length); 
+                    selectedQuestions = baseQuestions.slice(start - 1, end);
+                    if (document.getElementById('shuffle-questions').checked) {
+                        shuffleArray(selectedQuestions);
+                    }
+                } else {
+                    let limit = parseInt(customVal);
+                    if (isNaN(limit) || limit < 1) limit = baseQuestions.length;
+                    if (document.getElementById('shuffle-questions').checked) shuffleArray(baseQuestions);
+                    selectedQuestions = baseQuestions.slice(0, Math.min(limit, baseQuestions.length));
+                }
+            } else {
+                let limit = countType === 'all' ? baseQuestions.length : parseInt(countType);
+                if (document.getElementById('shuffle-questions').checked) shuffleArray(baseQuestions);
+                selectedQuestions = baseQuestions.slice(0, Math.min(limit, baseQuestions.length));
+            }
+
+            currentTestQuestions = selectedQuestions;
+
+            currentTestQuestions.forEach(q => {
+                if (document.getElementById('shuffle-options').checked) shuffleArray(q.options);
+                q.displayOptions = q.options.map((opt, index) => ({ ...opt, visualKey: String.fromCharCode(65 + index) }));
+                q.displayAnswer = q.displayOptions.filter(o => o.isCorrect).map(o => o.visualKey);
+            });
+
+            userAnswers = new Array(currentTestQuestions.length).fill(null);
+            currentQuestionIndex = 0; isQuizActive = true;
+            switchScreen('quiz-screen'); renderQuestion();
+        }
+
+        function renderQuestion() {
+            const q = currentTestQuestions[currentQuestionIndex];
+            document.getElementById('quiz-progress').innerText = `題目 ${currentQuestionIndex + 1} / ${currentTestQuestions.length}`;
+            document.getElementById('question-text').innerText = q.question;
+            
+            const optionsContainer = document.getElementById('options-container');
+            optionsContainer.innerHTML = '';
+            
+            q.displayOptions.forEach(opt => {
+                const div = document.createElement('div');
+                div.className = 'option-label';
+                div.innerHTML = `<b>${opt.visualKey}.</b> ${opt.text}`;
+                div.onclick = () => {
+                    if (document.getElementById('submit-btn').style.display === 'none') return;
+                    if (q.displayAnswer.length > 1) div.classList.toggle('selected');
+                    else { document.querySelectorAll('.option-label').forEach(el => el.classList.remove('selected')); div.classList.add('selected'); }
+                    updateSubmitBtnState();
+                };
+                div.dataset.visualKey = opt.visualKey;
+                div.dataset.isCorrect = opt.isCorrect;
+                optionsContainer.appendChild(div);
+            });
+
+            document.getElementById('feedback-box').style.display = 'none';
+            document.getElementById('submit-btn').style.display = 'block';
+            document.getElementById('next-btn').style.display = 'none';
+            // BUG修復：確保每次渲染題目時，按鈕文字皆還原為「下一題」
+            document.getElementById('next-btn').innerText = '下一題 →'; 
+            updateSubmitBtnState();
+        }
+
+        function updateSubmitBtnState() {
+            const q = currentTestQuestions[currentQuestionIndex];
+            const btn = document.getElementById('submit-btn');
+            btn.innerText = q.displayAnswer.length > 1 ? '確認送出 (多選題)' : '確認送出';
+        }
+
+        function submitAnswer() {
+            const q = currentTestQuestions[currentQuestionIndex];
+            const selectedElements = Array.from(document.querySelectorAll('.option-label.selected'));
+            const selectedVisualKeys = selectedElements.map(el => el.dataset.visualKey).sort();
+            
+            if (selectedVisualKeys.length === 0) { alert('請至少選擇一個答案！'); return; }
+
+            userAnswers[currentQuestionIndex] = selectedVisualKeys;
+            const isCorrect = JSON.stringify(selectedVisualKeys) === JSON.stringify(q.displayAnswer.sort());
+
+            document.querySelectorAll('.option-label').forEach(el => {
+                const isOptCorrect = el.dataset.isCorrect === 'true';
+                const isSelected = el.classList.contains('selected');
+                el.onclick = null; el.style.cursor = 'default'; 
+                if (isOptCorrect) el.classList.add('correct-ans');
+                else if (isSelected && !isOptCorrect) el.classList.add('wrong-ans');
+            });
+
+            const feedbackBox = document.getElementById('feedback-box');
+            feedbackBox.style.display = 'block';
+            if (isCorrect) {
+                feedbackBox.style.backgroundColor = 'var(--success-bg)';
+                feedbackBox.style.borderColor = 'var(--success-border)';
+                feedbackBox.style.color = 'var(--success-border)';
+                feedbackBox.innerHTML = '✓ 答對了！';
+            } else {
+                feedbackBox.style.backgroundColor = 'var(--danger-bg)';
+                feedbackBox.style.borderColor = 'var(--danger-border)';
+                feedbackBox.style.color = 'var(--danger-border)';
+                feedbackBox.innerHTML = '✗ 答錯了！正確答案是：' + q.displayAnswer.join(', ');
+                addToWrongQuestions(q);
+            }
+
+            document.getElementById('submit-btn').style.display = 'none';
+            document.getElementById('next-btn').style.display = 'block';
+            if (currentQuestionIndex === currentTestQuestions.length - 1) document.getElementById('next-btn').innerText = '查看成績 ★';
+        }
+
+        function nextQuestion() {
+            if (currentQuestionIndex < currentTestQuestions.length - 1) { currentQuestionIndex++; renderQuestion(); } 
+            else showResults();
+        }
+
+        function promptEndQuiz() { document.getElementById('end-modal').classList.add('active'); }
+        function closeModal() { document.getElementById('end-modal').classList.remove('active'); }
+        function forceEndQuiz() { closeModal(); currentTestQuestions = currentTestQuestions.slice(0, currentQuestionIndex + (userAnswers[currentQuestionIndex] ? 1 : 0)); showResults(); }
+
+        function showResults() {
+            isQuizActive = false; let correctCount = 0; let detailsHTML = '';
+            currentTestQuestions.forEach((q, i) => {
+                const uAns = userAnswers[i] || [];
+                const isCorrect = JSON.stringify(uAns.sort()) === JSON.stringify(q.displayAnswer.sort());
+                if (isCorrect) correctCount++;
+                detailsHTML += `
+                    <div class="detail-item" style="border-color: ${isCorrect ? 'var(--success-border)' : 'var(--danger-border)'};">
+                        <h4>Q${i+1}: ${q.question}</h4>
+                        <p style="color:var(--text-muted); font-size:0.9rem;">您的答案: ${uAns.join(', ') || '未作答'} | 正確答案: <b>${q.displayAnswer.join(', ')}</b></p>
+                    </div>`;
+            });
+
+            const total = currentTestQuestions.length;
+            document.getElementById('score-percent').innerText = `${total === 0 ? 0 : Math.round((correctCount / total) * 100)}%`;
+            document.getElementById('score-fraction').innerText = `${correctCount} / ${total}`;
+            document.getElementById('correct-count').innerText = correctCount;
+            document.getElementById('wrong-count-display').innerText = total - correctCount;
+            document.getElementById('details-container').innerHTML = detailsHTML;
+            switchScreen('result-screen');
+        }
+
+        function restartQuiz() { goHome(); window.scrollTo(0,0); }
+        function addToWrongQuestions(q) {
+            if (!wrongQuestions.some(wq => wq.question === q.question)) {
+                wrongQuestions.push(q); localStorage.setItem('quizForgeWrongQuestions', JSON.stringify(wrongQuestions)); updateWrongCountUI();
+            }
+        }
+        function updateWrongCountUI() { document.getElementById('header-wrong-count').innerText = wrongQuestions.length; }
+
+        function openFlashcards() { flashcardIndex = 0; switchScreen('flashcard-screen'); renderFlashcard(); }
+        
+        function renderFlashcard() {
+            document.getElementById('fc-inner').classList.remove('flipped');
+            if (wrongQuestions.length === 0) {
+                document.getElementById('empty-flashcard-msg').style.display = 'block'; document.getElementById('flashcard-content').style.display = 'none'; return;
+            }
+            document.getElementById('empty-flashcard-msg').style.display = 'none'; document.getElementById('flashcard-content').style.display = 'block';
+
+            const q = wrongQuestions[flashcardIndex];
+            document.getElementById('flashcard-progress').innerText = `進度：${flashcardIndex + 1} / ${wrongQuestions.length}`;
+            
+            let optsText = q.displayOptions.map(o => `<div style="margin-bottom: 8px;"><b>${o.visualKey}.</b> ${o.text}</div>`).join('');
+            document.getElementById('fc-q-text').innerHTML = `<h3 style="margin-top:0;">${q.question}</h3><div style="font-size:1rem; text-align:left; display:block; width: 100%;">${optsText}</div>`;
+            
+            let correctOptsText = q.displayOptions
+                .filter(o => o.isCorrect)
+                .map(o => `<div style="padding: 12px; border: 1px solid var(--success-border); border-radius: 8px; background: var(--success-bg); color: var(--success-border); text-align: left; margin-top: 10px; font-size: 1rem;"><b>${o.visualKey}.</b> ${o.text}</div>`)
+                .join('');
+                
+            document.getElementById('fc-a-text').innerHTML = `
+                <div style="color: var(--text-main); font-size: 1.1rem; text-align: left; margin-bottom: 15px;">${q.question}</div>
+                <div style="width: 100%;">${correctOptsText}</div>
+            `;
+        }
+        
+        function flipCard() { document.getElementById('fc-inner').classList.toggle('flipped'); }
+        function nextFlashcard() { if (wrongQuestions.length) { flashcardIndex = (flashcardIndex + 1) % wrongQuestions.length; renderFlashcard(); } }
+        function prevFlashcard() { if (wrongQuestions.length) { flashcardIndex = (flashcardIndex - 1 + wrongQuestions.length) % wrongQuestions.length; renderFlashcard(); } }
+        
+        function markLearned() {
+            if (!wrongQuestions.length) return;
+            wrongQuestions.splice(flashcardIndex, 1); localStorage.setItem('quizForgeWrongQuestions', JSON.stringify(wrongQuestions)); updateWrongCountUI();
+            if (flashcardIndex >= wrongQuestions.length && flashcardIndex > 0) flashcardIndex--;
+            renderFlashcard();
+        }
+
+        function clearAllFlashcards() {
+            if (confirm('確定要清空所有錯題紀錄嗎？此動作無法復原。')) {
+                wrongQuestions = [];
+                localStorage.removeItem('quizForgeWrongQuestions');
+                updateWrongCountUI();
+                renderFlashcard();
+            }
+        }
+
+        function switchScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            isQuizActive = (screenId === 'quiz-screen');
+        }
+        function goHome() { switchScreen('home-screen'); }
+    </script>
+    <a href='https://azurecloud1975.github.io/my-little-test/index2.html'>工作項目02：作業準備</a>
+</body>
+</html>
